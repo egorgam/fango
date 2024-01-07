@@ -6,8 +6,8 @@ from fango.auth.repositories import (
     get_request,
     register_user,
 )
-from fango.auth.schemas import Credentials, Token, User
-from fango.routing import public
+from fango.auth.schemas import Credentials, Token
+from fango.security import public
 
 
 @public.post("/login/")
@@ -25,7 +25,7 @@ async def login(credentials: Credentials, request=Depends(get_request)) -> Token
 
 
 @public.post("/register/")
-async def register(request=Depends(get_request)) -> User:
+async def register(request=Depends(get_request)) -> int:
     payload = await request.json()
     user = await register_user(payload["email"], payload["password"])
-    return User.model_validate(user)
+    return user.pk
