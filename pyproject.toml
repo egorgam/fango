@@ -2,6 +2,8 @@
 name = "fango"
 version = "0.0.2"
 description = "Metaframework for web with combined FastAPI and Django"
+repository = "https://github.com/egorgam/fango"
+keywords = ["fastapi", "django", "fango"]
 authors = ["Egor Gamazin <egorgamazin@yandex.ru>"]
 license = "MIT"
 readme = "README.md"
