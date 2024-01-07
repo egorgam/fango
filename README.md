@@ -1,8 +1,5 @@
-<<<<<<< Updated upstream
 # <img src='https://github.com/egorgam/fango/assets/13712792/e541fff2-3833-4f30-ba9b-09ea5c375077' width='30'> Fango
 
-Template with FastAPI &amp; Django 4.2 (async Django ORM and Sync Django admin)
-=======
 Metaframework for web with combined FastAPI and Django.
 
 Why?
@@ -53,4 +50,3 @@ Some built in features of fango:
 
 1. Async cypher JWT auth
 2. DRF-like cursor paginaton
->>>>>>> Stashed changes
