@@ -18,8 +18,8 @@ repos:
     exclude: static
   - id: forbid-new-submodules
   - id: check-merge-conflict
-  # - id: no-commit-to-branch
-  #   args: [--branch, master]
+  - id: no-commit-to-branch
+    args: [--branch, master]
 
 - repo: https://github.com/psf/black
   rev: 23.9.1
@@ -46,8 +46,3 @@ repos:
   - id: flake8
     args: [--max-line-length=120]
     exclude: migrations
-
-- repo: https://github.com/RobertCraigie/pyright-python
-  rev: v1.1.332
-  hooks:
-  - id: pyright
