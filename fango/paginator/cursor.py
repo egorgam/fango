@@ -6,7 +6,8 @@ from urllib import parse
 from asgiref.sync import sync_to_async
 from django.db.models import QuerySet
 from django.utils.encoding import force_str
-from paginator.schemas import Page
+
+from fango.paginator.schemas import Page
 
 T = TypeVar("T")
 
@@ -14,10 +15,6 @@ Cursor = namedtuple("Cursor", ["offset", "reverse", "position"])
 
 
 def replace_query_param(url, key, val):
-    """
-    Given a URL and a key/val pair, set or replace an item in the query
-    parameters of the URL, and return the new URL.
-    """
     (scheme, netloc, path, query, fragment) = parse.urlsplit(force_str(url))
     query_dict = parse.parse_qs(query, keep_blank_values=True)
     query_dict[force_str(key)] = [force_str(val)]
