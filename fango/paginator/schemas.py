@@ -8,4 +8,4 @@ T = TypeVar("T")
 class Page(BaseModel, Generic[T]):
     previous: str | None
     next: str | None
-    results: tuple
+    results: list[T]

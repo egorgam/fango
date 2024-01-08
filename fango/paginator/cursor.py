@@ -91,7 +91,7 @@ class CursorPagination:
 
         queryset.query.set_limits(high=offset + self.page_size + 1)
 
-        data = tuple(queryset)
+        data = list(queryset)
         return self.get_page(data)
 
     async def paginate_async(self, queryset: "QuerySet | ValuesQuerySet") -> "Page":
@@ -105,10 +105,10 @@ class CursorPagination:
 
         queryset.query.set_limits(high=offset + self.page_size + 1)
 
-        data = tuple([x async for x in queryset])
+        data = [x async for x in queryset]
         return self.get_page(data)
 
-    def get_page(self, data: tuple) -> Page:
+    def get_page(self, data: list) -> Page:
         if len(data) > self.page_size:
             self.has_more_data = True
             data = data[:-1]
