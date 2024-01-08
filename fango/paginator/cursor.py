@@ -78,7 +78,7 @@ class CursorPagination:
         query = parse.urlencode(sorted(query_dict.items()), doseq=True)
         return parse.urlunsplit((scheme, netloc, path, query, fragment))
 
-    def _sort_and_paginate(self, queryset: "QuerySet") -> "QuerySet":
+    def _paginate(self, queryset: "QuerySet") -> "QuerySet":
         """
         Base logic of cursor pagination.
 
@@ -99,7 +99,7 @@ class CursorPagination:
         You can create two-step pipeline with data enrichment.
 
         """
-        page = self._sort_and_paginate(queryset)
+        page = self._paginate(queryset)
         return list(page.only("id").values_list("id", flat=True))
 
     def get_page(self, queryset: "QuerySet") -> Page:
@@ -107,7 +107,7 @@ class CursorPagination:
         This method is most priority to simple get paginated data.
 
         """
-        page = self._sort_and_paginate(queryset)
+        page = self._paginate(queryset)
         data = [x for x in page]
         return self.page_response(data)
 
@@ -117,7 +117,7 @@ class CursorPagination:
         supports async filtering and slicing, and sync method is faster now.
 
         """
-        page = self._sort_and_paginate(queryset)
+        page = self._paginate(queryset)
         data = [x async for x in page]
         return self.page_response(data)
 
