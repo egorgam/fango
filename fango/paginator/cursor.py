@@ -1,7 +1,6 @@
 import typing
 
 if typing.TYPE_CHECKING:
-    from django.db.models.query import ValuesQuerySet
     from django.db.models import QuerySet
     from fastapi import Request
 
@@ -25,12 +24,11 @@ class CursorPagination:
 
     """
 
-    def __init__(self, request: "Request", page_size: int, ordering: tuple) -> None:
+    def __init__(self, request: "Request", page_size: int) -> None:
         self.request = request
         self.cursor = self._decode_cursor()
         self.has_more_data = False
         self.page_size = page_size
-        self.ordering = ordering
 
     def _positive_int(self, integer_string: str, strict: bool = False, cutoff: int | None = None) -> int:
         ret = int(integer_string)
@@ -80,7 +78,11 @@ class CursorPagination:
         query = parse.urlencode(sorted(query_dict.items()), doseq=True)
         return parse.urlunsplit((scheme, netloc, path, query, fragment))
 
-    def paginate_sync(self, queryset: "QuerySet | ValuesQuerySet") -> "Page":
+    def _sort_and_paginate(self, queryset: "QuerySet") -> "QuerySet":
+        """
+        Base logic of cursor pagination.
+
+        """
         if self.cursor:
             offset = self.cursor.offset
         else:
@@ -89,26 +91,37 @@ class CursorPagination:
         if self.cursor and self.cursor.position is not None:
             queryset = queryset.filter(id__gt=int(self.cursor.position))
 
-        queryset.query.set_limits(high=offset + self.page_size + 1)
+        return queryset[: offset + self.page_size + 1]
 
-        data = list(queryset)
-        return self.get_page(data)
+    def get_page_ids(self, queryset: "QuerySet") -> list:
+        """
+        This method can be used in complex algorithms with annotations or aggregations.
+        You can create two-step pipeline with data enrichment.
 
-    async def paginate_async(self, queryset: "QuerySet | ValuesQuerySet") -> "Page":
-        if self.cursor:
-            offset = self.cursor.offset
-        else:
-            offset = 0
+        """
+        page = self._sort_and_paginate(queryset)
+        return list(page.only("id").values_list("id", flat=True))
 
-        if self.cursor and self.cursor.position is not None:
-            queryset = queryset.filter(id__gt=int(self.cursor.position))
+    def get_page(self, queryset: "QuerySet") -> Page:
+        """
+        This method is most priority to simple get paginated data.
 
-        queryset.query.set_limits(high=offset + self.page_size + 1)
+        """
+        page = self._sort_and_paginate(queryset)
+        data = [x for x in page]
+        return self.page_response(data)
 
-        data = [x async for x in queryset]
-        return self.get_page(data)
+    async def get_page_async(self, queryset: "QuerySet") -> Page:
+        """
+        This method is for using in async views. Unfortenatly Django not
+        supports async filtering and slicing, and sync method is faster now.
 
-    def get_page(self, data: list) -> Page:
+        """
+        page = self._sort_and_paginate(queryset)
+        data = [x async for x in page]
+        return self.page_response(data)
+
+    def page_response(self, data: list) -> Page:
         if len(data) > self.page_size:
             self.has_more_data = True
             data = data[:-1]
