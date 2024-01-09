@@ -77,15 +77,17 @@ class CursorPagination:
         """
         ordering = queryset.model._meta.ordering
         self.reverse = "-" in ordering[0]
+        self.ordering_field = ordering[0].lstrip("-")
+
         self.position = self._decode_cursor()
 
         queryset = queryset.order_by(*ordering)
 
         if self.position is not None:
             if self.reverse:
-                lookup = {"id__lt": self.position}
+                lookup = {f"{self.ordering_field}__lt": self.position}
             else:
-                lookup = {"id__gt": self.position}
+                lookup = {f"{self.ordering_field}__gt": self.position}
 
             queryset = queryset.filter(**lookup)
 
@@ -95,12 +97,12 @@ class CursorPagination:
         if not self.has_more_data:
             return None
 
-        return self._encode_cursor(data[-1]["id"])
+        return self._encode_cursor(getattr(data[-1], self.ordering_field, data[-1][self.ordering_field]))
 
     def get_previous_link(self, data: list) -> str | None:
         if self.position:
             if self.reverse:
-                position = data[0]["id"] + self.page_size + 1
+                position = getattr(data[0], self.ordering_field, data[0][self.ordering_field]) + self.page_size + 1
             else:
                 position = max(self.position - self.page_size, 0)
 
