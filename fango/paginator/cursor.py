@@ -97,12 +97,13 @@ class CursorPagination:
         if not self.has_more_data:
             return None
 
-        return self._encode_cursor(getattr(data[-1], self.ordering_field, data[-1][self.ordering_field]))
+        return self._encode_cursor(getattr(data[-1], self.ordering_field, None) or data[-1][self.ordering_field])
 
     def get_previous_link(self, data: list) -> str | None:
         if self.position:
             if self.reverse:
-                position = getattr(data[0], self.ordering_field, data[0][self.ordering_field]) + self.page_size + 1
+                first_element_id = getattr(data[0], self.ordering_field, None) or data[0][self.ordering_field]
+                position = first_element_id + self.page_size + 1
             else:
                 position = max(self.position - self.page_size, 0)
 
