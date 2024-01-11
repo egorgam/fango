@@ -1,23 +1,45 @@
 from datetime import datetime, timedelta
 from uuid import uuid4
 
-from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.models import AbstractBaseUser
-from fastapi import Request
-from jose import jwt
+from fastapi import HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
+from jose import JWTError, jwt
 
 User: type[AbstractBaseUser] = get_user_model()
 
 
-def get_request(request: Request):
-    request.META = {"REMOTE_ADDR": request.client.host}  # type: ignore
-    return request
+def decode_token(auth: str) -> dict | None:
+    try:
+        scheme, token = auth.split()
+        if scheme == "Bearer":
+            return jwt.decode(
+                token,
+                settings.PUBLIC_KEY,
+                algorithms=[settings.ALGORITHM],
+                options={"verify_aud": False},
+            )
+    except (ValueError, UnicodeDecodeError, JWTError) as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 
-async def get_user_for_request_middleware(id: int) -> AbstractBaseUser | None:
-    if user := await User.objects.filter(id=id).afirst():
+def get_user(request: Request) -> AbstractBaseUser | None:
+    payload = decode_token(request.headers["Authorization"])
+    if not payload:
+        return
+
+    if user := User.objects.filter(id=payload["user_id"]).first():
+        return user
+
+
+async def get_user_async(request: Request) -> AbstractBaseUser | None:
+    payload = decode_token(request.headers["Authorization"])
+    if not payload:
+        return
+
+    if user := await User.objects.filter(id=payload["user_id"]).afirst():
         return user
 
 
@@ -31,7 +53,7 @@ async def register_user(email: str, password: str) -> AbstractBaseUser:
 
 
 async def authenticate_user(request: Request, email: str, password: str):
-    return await sync_to_async(authenticate)(request=request, email=email, password=password)
+    return await run_in_threadpool(authenticate, request=request, email=email, password=password)
 
 
 def create_access_token(user: AbstractBaseUser):
