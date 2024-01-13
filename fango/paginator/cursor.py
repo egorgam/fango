@@ -28,7 +28,7 @@ class CursorPagination:
         self.ordering = ordering
         self.cursor = self.decode_cursor()
 
-    def paginate_queryset(self, queryset: "QuerySet") -> list["Model"]:
+    def get_page(self, queryset: "QuerySet") -> list["Model"]:
         if self.cursor.reverse:
             queryset = queryset.order_by(*reverse_ordering(self.ordering))
         else:
@@ -181,9 +181,9 @@ class CursorPagination:
             attr = getattr(instance, field_name)
         return str(attr)
 
-    def get_page_response(self, data: list["Model"]) -> Page:
+    def get_page_response(self, data: "QuerySet") -> Page:
         return Page(
             next=self.get_next_link(),
             previous=self.get_previous_link(),
-            results=data,
+            results=data,  # type: ignore
         )

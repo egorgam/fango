@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "fango"
-version = "0.1.3"
+version = "0.1.4"
 description = "Metaframework for web with combined FastAPI and Django"
 repository = "https://github.com/egorgam/fango"
 keywords = ["fastapi", "django", "fango"]
