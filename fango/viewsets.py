@@ -2,11 +2,10 @@ import typing
 
 if typing.TYPE_CHECKING:
     from django.db.models import QuerySet
-    from fastapi import Request
 
 from typing import Generic, TypeVar
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
@@ -51,7 +50,7 @@ class AsyncReadOnlyViewSet(FangoGenericViewSet, Generic[T]):
     internal: "APIRouter" = APIRouter()
 
     @internal.api_route("/", methods=["GET"])
-    async def list(self, request: "Request") -> list["T"]:
+    async def list(self, request: "Request") -> list[T]:
         return [self.pydantic_schema.model_validate(x, context={"request": request}) async for x in self.get_queryset()]
 
     @internal.api_route("/{pk}/", methods=["GET"])
