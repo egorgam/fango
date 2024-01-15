@@ -3,47 +3,45 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
-from django.contrib.auth.models import AbstractBaseUser
 from fastapi import HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from jose import JWTError, jwt
 
-User: type[AbstractBaseUser] = get_user_model()
+User = get_user_model()
 
 
-def decode_token(auth: str) -> dict | None:
+def decode_token(auth: str) -> dict:
     try:
-        scheme, token = auth.split()
-        if scheme == "Bearer":
-            return jwt.decode(
-                token,
-                settings.PUBLIC_KEY,
-                algorithms=[settings.ALGORITHM],
-                options={"verify_aud": False},
-            )
+        _, token = auth.split()
+        return jwt.decode(
+            token,
+            settings.PUBLIC_KEY,
+            algorithms=[settings.ALGORITHM],
+            options={"verify_aud": False},
+        )
     except (ValueError, UnicodeDecodeError, JWTError) as e:
         raise HTTPException(status_code=403, detail=str(e))
 
 
-def get_user(request: Request) -> AbstractBaseUser | None:
+def get_user(request: "Request") -> "User | None":
+    """
+    Return User instance by token
+
+    """
     payload = decode_token(request.headers["Authorization"])
-    if not payload:
-        return
-
-    if user := User.objects.filter(id=payload["user_id"]).first():
-        return user
+    return User.objects.get(id=payload["user_id"])
 
 
-async def get_user_async(request: Request) -> AbstractBaseUser | None:
+async def get_user_async(request: "Request") -> "User | None":
+    """
+    Return User instance by token async
+
+    """
     payload = decode_token(request.headers["Authorization"])
-    if not payload:
-        return
-
-    if user := await User.objects.filter(id=payload["user_id"]).afirst():
-        return user
+    return await User.objects.aget(id=payload["user_id"])
 
 
-async def register_user(email: str, password: str) -> AbstractBaseUser:
+async def register_user(email: str, password: str) -> "User":
     user = await User.objects.acreate(
         email=email,
     )
@@ -56,7 +54,7 @@ async def authenticate_user(request: Request, email: str, password: str):
     return await run_in_threadpool(authenticate, request=request, email=email, password=password)
 
 
-def create_access_token(user: AbstractBaseUser):
+def create_access_token(user: "User"):
     if expires_delta := timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES):
         expire = datetime.utcnow() + expires_delta
     else:
@@ -68,5 +66,4 @@ def create_access_token(user: AbstractBaseUser):
         "user_id": user.pk,
         "token_type": "access",
     }
-    encoded = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-    return encoded
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)

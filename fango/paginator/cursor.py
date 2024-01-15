@@ -157,7 +157,7 @@ class CursorPagination:
             reverse = bool(int(tokens.get("r", 0)))
             position = tokens.get("p")
             return Cursor(offset=offset, reverse=reverse, position=position)
-        except Exception:
+        except (TypeError, ValueError):
             raise HTTPException(status_code=500, detail="Invalid cursor.")
 
     def encode_cursor(self, cursor: Cursor) -> str:
@@ -169,7 +169,7 @@ class CursorPagination:
         if cursor.position is not None:
             tokens["p"] = cursor.position
 
-        querystring = urlencode(tokens)
+        querystring = urlencode(tokens, doseq=True)
         encoded = b64encode(querystring.encode()).decode()
         return str(self.request.url.include_query_params(cursor=encoded))
 
@@ -181,9 +181,9 @@ class CursorPagination:
             attr = getattr(instance, field_name)
         return str(attr)
 
-    def get_page_response(self, data: "QuerySet") -> Page:
+    def get_page_response(self, data) -> Page:
         return Page(
             next=self.get_next_link(),
             previous=self.get_previous_link(),
-            results=data,  # type: ignore
+            results=data,
         )

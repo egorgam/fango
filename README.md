@@ -13,3 +13,4 @@ Some built in features of FANGO:
 
 1. Async cypher JWT auth
 2. DRF-like cursor paginaton
+3. DRF-lile GenericViewSet

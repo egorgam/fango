@@ -46,6 +46,9 @@ class FangoRoute(APIRoute):
         return custom_route_handler
 
 
-class ExcludeUnsetAPIRouter(APIRouter):
+class FangoRouter(APIRouter):
     def get(self, *args, **kwargs) -> Callable:
         return super().get(*args, **kwargs, response_model_exclude_unset=True)
+
+    def register(self, basename, klass) -> None:
+        klass(self, basename)
