@@ -2,6 +2,7 @@ import typing
 
 if typing.TYPE_CHECKING:
     from django.db.models import QuerySet
+    from fastapi import Request
 
 from typing import Generic, TypeVar
 
@@ -44,3 +45,16 @@ class FangoGenericViewSet(Generic[T]):
 
         """
         return self.queryset
+
+
+class AsyncReadOnlyViewSet(FangoGenericViewSet, Generic[T]):
+    internal: "APIRouter" = APIRouter()
+
+    @internal.api_route("/", methods=["GET"])
+    async def list(self, request: "Request") -> list["T"]:
+        return [self.pydantic_schema.model_validate(x, context={"request": request}) async for x in self.get_queryset()]
+
+    @internal.api_route("/{pk}/", methods=["GET"])
+    async def retrieve(self, request: "Request", pk: int) -> "T":
+        entry = await self.get_queryset().aget(pk=pk)
+        return self.pydantic_schema.model_validate(entry, context={"request": request})

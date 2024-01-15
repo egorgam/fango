@@ -10,8 +10,8 @@ from typing import TypeVar
 
 from fastapi import HTTPException
 
-from fango.paginator.schemas import Cursor, Page
-from fango.paginator.utils import reverse_ordering
+from fango.schemas import Cursor, Page
+from fango.utils import replace_proto, reverse_ordering
 
 T = TypeVar("T")
 
@@ -183,7 +183,7 @@ class CursorPagination:
 
     def get_page_response(self, data) -> Page:
         return Page(
-            next=self.get_next_link(),
-            previous=self.get_previous_link(),
+            next=replace_proto(self.get_next_link()),
+            previous=replace_proto(self.get_previous_link()),
             results=data,
         )
