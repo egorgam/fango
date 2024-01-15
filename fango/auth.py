@@ -23,7 +23,7 @@ def decode_token(auth: str) -> dict:
         raise HTTPException(status_code=403, detail=str(e))
 
 
-def get_user(request: "Request") -> "User | None":
+def get_user(request: "Request") -> "User":
     """
     Return User instance by token
 
@@ -32,7 +32,7 @@ def get_user(request: "Request") -> "User | None":
     return User.objects.get(id=payload["user_id"])
 
 
-async def get_user_async(request: "Request") -> "User | None":
+async def get_user_async(request: "Request") -> "User":
     """
     Return User instance by token async
 
