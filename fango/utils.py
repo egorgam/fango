@@ -8,6 +8,7 @@ from typing import Any, Callable
 from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.core.cache import cache
+from django.db.models import Choices
 from django.db.models.enums import ChoicesMeta
 
 from fango.generics import MethodT
@@ -91,3 +92,7 @@ def copy_instance_method(method: MethodT) -> MethodT:
         ),
         method.__self__,
     )
+
+
+def get_choices_label(enum: type[Choices], value: int) -> str:
+    return enum.choices[value][1]
