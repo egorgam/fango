@@ -1,13 +1,28 @@
+__all__ = [
+    "decode_token",
+    "get_user",
+    "get_user_async",
+    "register_user",
+    "authenticate_user",
+    "create_access_token",
+]
+
+import typing
+
+if typing.TYPE_CHECKING:
+    from django.contrib.auth.models import User
+
 from datetime import datetime, timedelta
 from uuid import uuid4
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from fastapi import HTTPException, Request
-from fastapi.concurrency import run_in_threadpool
 from jose import JWTError, jwt
 
-User = get_user_model()
+from fango.utils import orm_async
+
+UserModel: "User" = get_user_model()  # type: ignore
 
 
 def decode_token(auth: str) -> dict:
@@ -25,24 +40,32 @@ def decode_token(auth: str) -> dict:
 
 def get_user(request: "Request") -> "User":
     """
-    Return User instance by token
+    Function returns User instance by token
 
     """
     payload = decode_token(request.headers["Authorization"])
-    return User.objects.get(id=payload["user_id"])
+    user = UserModel.objects.only(*getattr(settings, "REQUEST_USER_FIELDS", ())).get(id=payload["user_id"])
+    request.app.state.user = user
+    return user
 
 
 async def get_user_async(request: "Request") -> "User":
     """
-    Return User instance by token async
+    Function returns User instance by token async
 
     """
     payload = decode_token(request.headers["Authorization"])
-    return await User.objects.aget(id=payload["user_id"])
+    user = await UserModel.objects.only(*getattr(settings, "REQUEST_USER_FIELDS", ())).aget(id=payload["user_id"])
+    request.app.state.user = user
+    return user
 
 
 async def register_user(email: str, password: str) -> "User":
-    user = await User.objects.acreate(
+    """
+    Function is creating User instance by token async.
+
+    """
+    user = await UserModel.objects.acreate(
         email=email,
     )
     user.set_password(password)
@@ -50,11 +73,19 @@ async def register_user(email: str, password: str) -> "User":
     return user
 
 
-async def authenticate_user(request: Request, email: str, password: str):
-    return await run_in_threadpool(authenticate, request=request, email=email, password=password)
+async def authenticate_user(request: Request, email: str, password: str) -> "User":
+    """
+    Function is authenticate user with django backend.
+
+    """
+    return await orm_async(authenticate, request=request, email=email, password=password)
 
 
-def create_access_token(user: "User"):
+def create_access_token(user: "User") -> str:
+    """
+    Function is creating access token.
+
+    """
     if expires_delta := timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES):
         expire = datetime.utcnow() + expires_delta
     else:

@@ -1,20 +1,12 @@
 from typing import Callable
 
-from fastapi import APIRouter, Request, Response
-from fastapi.routing import APIRoute
+from fastapi import APIRouter
+from fastapi.security import OAuth2PasswordBearer
 
-from fango.request import FangoRequest
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
-class FangoRoute(APIRoute):
-    def get_route_handler(self) -> Callable:
-        original_route_handler = super().get_route_handler()
-
-        async def custom_route_handler(request: Request) -> Response:
-            request = FangoRequest(request.scope, request.receive)
-            return await original_route_handler(request)
-
-        return custom_route_handler
+action = APIRouter()
 
 
 class FangoRouter(APIRouter):
