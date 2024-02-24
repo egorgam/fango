@@ -1,4 +1,12 @@
-__all__ = ["ttl_cache", "reverse_ordering", "replace_proto", "orm_async", "get_choices_as_data"]
+__all__ = [
+    "ttl_cache",
+    "reverse_ordering",
+    "replace_proto",
+    "orm_async",
+    "get_choices_as_data",
+    "copy_instance_method",
+    "get_choices_label",
+]
 
 import types
 from functools import wraps
@@ -95,4 +103,8 @@ def copy_instance_method(method: MethodT) -> MethodT:
 
 
 def get_choices_label(enum: type[Choices], value: int) -> str:
+    """
+    Function returns choices text.
+
+    """
     return enum.choices[value][1]

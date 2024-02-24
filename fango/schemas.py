@@ -7,8 +7,6 @@ from django.db.models import Manager
 from pydantic import BaseModel, ConfigDict, field_validator
 from typing_extensions import NotRequired
 
-from fango.utils import get_choices_label
-
 T = TypeVar("T")
 
 
@@ -42,6 +40,8 @@ class ReadOnlyModel(BaseModel):
 
     @field_validator("*", mode="before")
     def render_complex_fields(cls, value, info):
+        from fango.utils import get_choices_label
+
         for type_ in get_args(cls.model_fields[info.field_name].annotation):
             if metadata := getattr(type_, "__pydantic_generic_metadata__", None):
                 if value is not None and metadata["origin"] is ChoicesItem:
@@ -62,3 +62,12 @@ class ActionClasses(TypedDict):
     retrieve: NotRequired[type[BaseModel]]
     update: NotRequired[type[BaseModel]]
     delete: NotRequired[type[BaseModel]]
+
+
+class Token(BaseModel):
+    access: str
+
+
+class Credentials(BaseModel):
+    email: str
+    password: str
