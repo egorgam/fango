@@ -14,3 +14,5 @@ Some built in features of FANGO:
 1. Async cypher JWT auth
 2. DRF-like cursor paginaton
 3. DRF-lile GenericViewSet
+4. Adapter for save pydantic model data with ORM
+5. FastAPI TestClient for pytest-django tests

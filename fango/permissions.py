@@ -1,16 +1,16 @@
+import inspect
+from types import MethodType
+from typing import get_args
+
+from django.contrib.auth.models import User
+from fastapi import Depends, HTTPException, Request
+
+from fango.utils import run_async, ttl_cache
+
 __all__ = [
     "CHECK_MODEL_PERMISSIONS",
     "ALLOW_ANY",
 ]
-
-import typing
-
-if typing.TYPE_CHECKING:
-    from django.contrib.auth.models import User
-
-from fastapi import Depends, HTTPException, Request
-
-from fango.utils import orm_async, ttl_cache
 
 
 @ttl_cache(10)
@@ -20,7 +20,7 @@ async def _get_user_permissions(user: "User") -> set[str]:
     and caching to 10s.
 
     """
-    return await orm_async(user.get_all_permissions)
+    return await run_async(user.get_all_permissions)
 
 
 def _get_permissions_mapping(request: "Request"):
@@ -28,7 +28,7 @@ def _get_permissions_mapping(request: "Request"):
     Function for checking stored permission_mapping, or return default.
 
     """
-    if state_stored := hasattr(request.app.state, "permissions_mapping"):
+    if state_stored := hasattr(request.state, "permissions_mapping"):
         assert isinstance(state_stored, list)
         return state_stored
 
@@ -48,9 +48,17 @@ async def _check_model_permissions(request: "Request") -> None:
     Model Permissions check implementation.
 
     """
-    model = request.scope["endpoint"].__self__.queryset.model
+
+    endpoint = request.scope["endpoint"]
+
+    if isinstance(endpoint, MethodType):
+        model = endpoint.__self__.queryset.model
+    else:
+        signature = inspect.signature(request.scope["route"].response_model)
+        model = get_args(signature.parameters["results"].annotation)[0].model
+
     permissions_mapping = _get_permissions_mapping(request)
-    user_permissions = await _get_user_permissions(request.app.state.user)
+    user_permissions = await _get_user_permissions(request.state.user)
 
     if request.method in permissions_mapping:
         permissions = permissions_mapping[request.method]

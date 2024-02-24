@@ -1,11 +1,11 @@
-__all__ = ["Cursor", "Page", "Entry", "ChoicesItem", "ReadOnlyModel"]
-
 from dataclasses import dataclass
 from typing import Generic, TypedDict, TypeVar, get_args
 
 from django.db.models import Manager
 from pydantic import BaseModel, ConfigDict, field_validator
 from typing_extensions import NotRequired
+
+__all__ = ["Cursor", "Page", "Entry", "ChoicesItem", "ReadOnlyModel"]
 
 T = TypeVar("T")
 

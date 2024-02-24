@@ -20,7 +20,7 @@ from django.contrib.auth import authenticate, get_user_model
 from fastapi import HTTPException, Request
 from jose import JWTError, jwt
 
-from fango.utils import orm_async
+from fango.utils import run_async
 
 UserModel: "User" = get_user_model()  # type: ignore
 
@@ -45,7 +45,7 @@ def get_user(request: "Request") -> "User":
     """
     payload = decode_token(request.headers["Authorization"])
     user = UserModel.objects.only(*getattr(settings, "REQUEST_USER_FIELDS", ())).get(id=payload["user_id"])
-    request.app.state.user = user
+    request.state.user = user
     return user
 
 
@@ -56,7 +56,7 @@ async def get_user_async(request: "Request") -> "User":
     """
     payload = decode_token(request.headers["Authorization"])
     user = await UserModel.objects.only(*getattr(settings, "REQUEST_USER_FIELDS", ())).aget(id=payload["user_id"])
-    request.app.state.user = user
+    request.state.user = user
     return user
 
 
@@ -78,7 +78,7 @@ async def authenticate_user(request: Request, email: str, password: str) -> "Use
     Function is authenticate user with django backend.
 
     """
-    return await orm_async(authenticate, request=request, email=email, password=password)
+    return await run_async(authenticate, request=request, email=email, password=password)
 
 
 def create_access_token(user: "User") -> str:

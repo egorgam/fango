@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "fango"
-version = "0.0.16"
+version = "0.0.17"
 description = "Metaframework for web with combined FastAPI and Django"
 repository = "https://github.com/egorgam/fango"
 keywords = ["fastapi", "django", "fango"]
@@ -13,6 +13,7 @@ python = "^3.10"
 django = ">=4.2,<6.0"
 fastapi = "^0.108.0"
 python-jose = "^3.3.0"
+pytest = "^8.0.1"
 
 
 [build-system]

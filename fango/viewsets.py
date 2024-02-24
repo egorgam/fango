@@ -8,7 +8,7 @@ from fastapi import Request
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
-from fango.generics import BaseModelT
+from fango.generics import BaseModelT, ModelT
 from fango.permissions import ALLOW_ANY
 from fango.routing import FangoRouter, action
 from fango.schemas import ActionClasses
@@ -28,6 +28,7 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
     http_method_names: set[str]
     lookup_value_converter: str = "int"
     pydantic_model_action_classes: ActionClasses = {}
+    dependencies = []
 
     def __init__(self, router: FangoRouter, basename: str) -> None:
         self.request: Request
@@ -78,11 +79,11 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
 
             if self.__class__.__name__ in route.endpoint.__qualname__ and route.endpoint.__module__ == self.__module__:
                 if ALLOW_ANY not in route.dependencies:
-                    route.dependencies = self._router.dependencies
+                    route.dependencies = [*self._router.dependencies, *self.dependencies]
 
                 route.endpoint = getattr(self, route.name)
                 route.path = f"{self._router.prefix}/{self._basename}{route.path}"
-                route.tags = [self._basename]
+                route.tags = [self._basename]  # type: ignore
                 exclude.add(route.name)
 
         return exclude
@@ -102,13 +103,13 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
         ]
         for route in router.routes:
             route = cast(APIRoute, route)
+            route.dependencies = [*self._router.dependencies, *self.dependencies]
 
             if "%s" in route.path:
                 route.path = route.path % self.lookup_value_converter
                 route.path_format = route.path_format % self.lookup_value_converter
 
             route.endpoint = self.__get_route_endpoint(route)
-
             if route.response_model:
                 self.__fix_generic_response_annotations(route)
 
@@ -173,22 +174,19 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
         return self.queryset
 
 
-class CreateUpdateMixin(Generic[BaseModelT]):
+class CreateUpdateMixin(Generic[BaseModelT, ModelT]):
     queryset: QuerySet
 
-    async def create_entry(self, payload: BaseModelT) -> int:
+    async def create_entry(self, payload: BaseModelT) -> ModelT:
         """
         Method for create new entry.
 
         """
-        instance = await self.queryset.model.from_schema(payload)
-        await instance.asave()
-        return instance.pk
+        return await self.queryset.model.from_schema(payload)
 
-    async def update_entry(self, payload: BaseModelT, pk: int):
+    async def update_entry(self, payload: BaseModelT, pk: int) -> ModelT:
         """
         Method for update existance entry.
 
         """
-        instance = await self.queryset.model.from_schema(payload, pk)
-        await instance.asave()
+        return await self.queryset.model.from_schema(payload, pk)
