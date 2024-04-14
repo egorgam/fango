@@ -5,7 +5,20 @@ from django.db.models import Manager
 from pydantic import BaseModel, ConfigDict, field_validator
 from typing_extensions import NotRequired
 
-__all__ = ["Cursor", "Page", "Entry", "ChoicesItem", "ReadOnlyModel"]
+from fango.adapters.types import PK
+
+__all__ = [
+    "Cursor",
+    "Page",
+    "Entry",
+    "ChoicesItem",
+    "FormModel",
+    "ActionClasses",
+    "Multiselect",
+    "CRUDAdapter",
+    "UnlinkAdapter",
+    "DBModel",
+]
 
 T = TypeVar("T")
 
@@ -23,6 +36,16 @@ class Page(BaseModel, Generic[T]):
     results: list[T]
 
 
+class CRUDAdapter(BaseModel, Generic[T]):
+    create: list[T] = []
+    update: list[T] = []
+    delete: list[PK]
+
+
+class UnlinkAdapter(BaseModel, Generic[T]):
+    unlink: list[PK]
+
+
 class Entry(BaseModel, Generic[T]):
     title: str | None
     results: T
@@ -33,13 +56,11 @@ class ChoicesItem(BaseModel, Generic[T]):
     name: str | None
 
 
-class ReadOnlyModel(BaseModel):
-    model_config = ConfigDict(from_attributes=True, frozen=True)
-
-    id: int
+class FormModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
     @field_validator("*", mode="before")
-    def render_complex_fields(cls, value, info):
+    def validate_complex_fields(cls, value, info):
         from fango.utils import get_choices_label
 
         for type_ in get_args(cls.model_fields[info.field_name].annotation):
@@ -49,16 +70,21 @@ class ReadOnlyModel(BaseModel):
 
         if isinstance(value, Manager):
             return value.all()
+
         return value
 
 
-class Multiselect(ReadOnlyModel):
+class Multiselect(FormModel):
     id: int
-    name: str | None
+    name: str | None = None
+
+
+class DBModel(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
 
 class ActionClasses(TypedDict):
-    list: NotRequired[type[BaseModel]]
+    table: NotRequired[type[BaseModel]]
     retrieve: NotRequired[type[BaseModel]]
     update: NotRequired[type[BaseModel]]
     delete: NotRequired[type[BaseModel]]

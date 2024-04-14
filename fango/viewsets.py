@@ -8,6 +8,7 @@ from fastapi import Request
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
+from fango.filters import generate_filterset_by_pydantic
 from fango.generics import BaseModelT, ModelT
 from fango.permissions import ALLOW_ANY
 from fango.routing import FangoRouter, action
@@ -32,6 +33,7 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
 
     def __init__(self, router: FangoRouter, basename: str) -> None:
         self.request: Request
+        self.filterset_class = generate_filterset_by_pydantic(self.pydantic_model)
         self._router = router
         self._basename = basename
         self.__initialize_http_methods()
@@ -39,13 +41,13 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
         self.__merge_routers()
 
     def __initialize_http_methods(self) -> None:
-        RO_METHODS = {"HEAD", "TRACE", "OPTIONS", "GET"}
-        RW_METHODS = {"PATCH", "POST", "PUT", "DELETE"}
+        ro_methods = {"HEAD", "TRACE", "OPTIONS", "GET"}
+        rw_methods = {"PATCH", "POST", "PUT", "DELETE"}
 
         if hasattr(self, "queryset") and self.queryset.model._meta.managed:
-            self.http_method_names = RO_METHODS | RW_METHODS
+            self.http_method_names = ro_methods | rw_methods
         else:
-            self.http_method_names = RO_METHODS
+            self.http_method_names = ro_methods
 
     def __initialize_pydantic_model_classes(self) -> None:
         """
@@ -105,7 +107,7 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
             route = cast(APIRoute, route)
             route.dependencies = [*self._router.dependencies, *self.dependencies]
 
-            if "%s" in route.path:
+            if "%" in route.path:
                 route.path = route.path % self.lookup_value_converter
                 route.path_format = route.path_format % self.lookup_value_converter
 
@@ -159,12 +161,17 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
                         route.response_model = klass
                     break
 
-    def get_pydantic_model_class(self, request: Request) -> BaseModelT:
+    def get_pydantic_model_class(self, request: Request) -> type[BaseModelT]:
         """
         Method for get concrete pydantic_model for route.
 
         """
-        return self.pydantic_model_action_classes[request.scope["route"].name]
+        route_name = request.scope["route"].name
+
+        if model := self.pydantic_model_action_classes.get(route_name):
+            return model
+        else:
+            return self.pydantic_model_action_classes["table"]
 
     def get_queryset(self, request: Request) -> QuerySet:
         """
@@ -182,11 +189,11 @@ class CreateUpdateMixin(Generic[BaseModelT, ModelT]):
         Method for create new entry.
 
         """
-        return await self.queryset.model.from_schema(payload)
+        return await self.queryset.model.save_from_schema(payload)
 
     async def update_entry(self, payload: BaseModelT, pk: int) -> ModelT:
         """
         Method for update existance entry.
 
         """
-        return await self.queryset.model.from_schema(payload, pk)
+        return await self.queryset.model.save_from_schema(payload, pk)

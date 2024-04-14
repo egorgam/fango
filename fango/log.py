@@ -1,7 +1,13 @@
+import inspect
 import logging
+from functools import wraps
+
+from django.conf import settings
 
 logger = logging.Logger("uvicorn.access")
 handler = logging.StreamHandler()
+
+__all__ = ["logger", "log_params"]
 
 
 class ColoredFormatter(logging.Formatter):
@@ -34,6 +40,26 @@ handler.setFormatter(ColoredFormatter("%(levelname)s%(message)s"))
 logger.setLevel(logging.INFO)
 logger.addHandler(handler)
 
-__slots__ = [
-    "logger",
-]
+arg_prefix = "\t\t--> "
+
+
+def log_params(prefix):
+    """
+    Decorator for logging function call with args.
+
+    """
+
+    def log(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if settings.ENABLE_CALL_LOG:
+                bound_arguments = inspect.signature(func).bind(*args, **kwargs)
+                bound_arguments.apply_defaults()
+                args_reprs = [arg_prefix + f"{name}={value!r}" for name, value in bound_arguments.arguments.items()]
+                signature = "\n".join(args_reprs)
+                logger.info(f"[{prefix}] call: {func.__name__} with params:\n{signature}\n")
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return log
