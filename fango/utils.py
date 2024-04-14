@@ -4,14 +4,11 @@ from functools import wraps
 from inspect import iscoroutinefunction
 from typing import Any, Callable
 
-from base.main import app
-from base.urls import router
 from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Choices
 from django.db.models.enums import ChoicesMeta
 from fastapi.concurrency import run_in_threadpool
-from fastapi.routing import APIRoute
 
 from fango.generics import MethodT
 from fango.schemas import ChoicesItem
@@ -25,7 +22,6 @@ __all__ = [
     "get_choices_as_data",
     "copy_instance_method",
     "get_choices_label",
-    "get_all_routes_basenames",
 ]
 
 
@@ -125,15 +121,3 @@ def get_choices_label(enum: type[Choices], value: int) -> str:
 
     """
     return enum.choices[value][1]
-
-
-def get_all_routes_basenames() -> set:
-    """
-    Function returns set of all routes basenames
-
-    """
-
-    fastapi = {x.tags[0] for x in app.routes if isinstance(x, APIRoute) and x.tags}
-    django = {x.name.split("-")[0] for x in router.urls}
-
-    return fastapi | django

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum
 from typing import Generic, TypedDict, TypeVar, get_args
 
 from django.db.models import Manager
@@ -60,16 +61,26 @@ class FormModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("*", mode="before")
-    def validate_complex_fields(cls, value, info):
-        from fango.utils import get_choices_label
-
-        for type_ in get_args(cls.model_fields[info.field_name].annotation):
-            if metadata := getattr(type_, "__pydantic_generic_metadata__", None):
-                if value is not None and metadata["origin"] is ChoicesItem:
-                    return {"id": value, "name": get_choices_label(metadata["args"][0], value)}
-
+    def query_relation_manager(cls, value):
         if isinstance(value, Manager):
             return value.all()
+        return value
+
+    @field_validator("*", mode="after")
+    def use_choices_label(cls, value, info):
+        from fango.utils import get_choices_label
+
+        annotation = cls.model_fields[info.field_name].annotation
+        types = get_args(annotation)
+
+        if value is not None:
+            for type_ in types:
+                if issubclass(type_, Enum):
+                    return get_choices_label(type_, value)
+
+                if metadata := getattr(type_, "__pydantic_generic_metadata__", None):
+                    if metadata["origin"] is ChoicesItem:
+                        return {"id": value, "name": get_choices_label(metadata["args"][0], value)}
 
         return value
 
