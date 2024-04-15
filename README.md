@@ -16,4 +16,4 @@ Some built in features of FANGO:
 3. DRF-lile GenericViewSet
 4. Adapter for save pydantic model data with ORM
 5. FastAPI TestClient for pytest-django tests
-6. Django-filter
+6. Django-filter support
