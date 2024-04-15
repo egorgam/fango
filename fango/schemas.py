@@ -66,21 +66,17 @@ class FormModel(BaseModel):
             return value.all()
         return value
 
-    @field_validator("*", mode="after")
+    @field_validator("*", mode="before")
     def use_choices_label(cls, value, info):
         from fango.utils import get_choices_label
 
-        annotation = cls.model_fields[info.field_name].annotation
-        types = get_args(annotation)
+        for type_ in get_args(cls.model_fields[info.field_name].annotation):
+            if issubclass(type_, Enum):
+                return get_choices_label(type_, value)
 
-        if value is not None:
-            for type_ in types:
-                if issubclass(type_, Enum):
-                    return get_choices_label(type_, value)
-
-                if metadata := getattr(type_, "__pydantic_generic_metadata__", None):
-                    if metadata["origin"] is ChoicesItem:
-                        return {"id": value, "name": get_choices_label(metadata["args"][0], value)}
+            if metadata := getattr(type_, "__pydantic_generic_metadata__", None):
+                if value is not None and metadata["origin"] is ChoicesItem:
+                    return {"id": value, "name": get_choices_label(metadata["args"][0], value)}
 
         return value
 
