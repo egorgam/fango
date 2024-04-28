@@ -25,7 +25,7 @@ MultipleRel = ManyToOneRel | ManyToManyField
 
 
 class AdapterError(Exception):
-    ...
+    pass
 
 
 class PydanticAdapter(Model):
@@ -227,6 +227,7 @@ def _get_or_create_relation(instance: Model, field: ForwardRel | MultipleRel, ke
     elif isinstance(value, Model):
         value.clean()
         value.save()
+        getattr(instance, field.name).add(value)
         return value
 
     else:

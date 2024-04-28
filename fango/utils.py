@@ -33,13 +33,11 @@ def ttl_cache(ttl=None) -> Any:
 
     def decorator(func: Callable):
         @wraps(func)
-        async def wrapped(*args, **kwargs) -> Callable:
+        def wrapped(*args, **kwargs) -> Callable:
             key = "ttl_cache_key_{}_{}".format(func.__name__, hash(args) + hash(frozenset(kwargs.items())))
             result = cache.get(key)
             if result is not None:
                 return result
-            if iscoroutinefunction(func):
-                result = await func(*args, **kwargs)
             else:
                 result = func(*args, **kwargs)
             cache.set(key, result, timeout=ttl)
@@ -120,4 +118,6 @@ def get_choices_label(enum: type[Choices], value: int) -> str:
     Function returns choices text.
 
     """
-    return enum.choices[value][1]
+
+    choices_dict = {k: v for k, v in enum.choices}
+    return choices_dict[value]

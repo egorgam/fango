@@ -5,7 +5,7 @@ from typing import get_args
 from django.contrib.auth.models import User
 from fastapi import Depends, HTTPException, Request
 
-from fango.utils import run_async, ttl_cache
+from fango.utils import ttl_cache
 
 __all__ = [
     "CHECK_MODEL_PERMISSIONS",
@@ -14,13 +14,13 @@ __all__ = [
 
 
 @ttl_cache(10)
-async def _get_user_permissions(user: "User") -> set[str]:
+def _get_user_permissions(user: "User") -> set[str]:
     """
     Function call user.get_all_permissions() in async context
     and caching to 10s.
 
     """
-    return await run_async(user.get_all_permissions)
+    return user.get_all_permissions()
 
 
 def _get_permissions_mapping(request: "Request"):
@@ -43,7 +43,7 @@ def _get_permissions_mapping(request: "Request"):
     }
 
 
-async def _check_model_permissions(request: "Request") -> None:
+def _check_model_permissions(request: "Request") -> None:
     """
     Model Permissions check implementation.
 
@@ -58,7 +58,7 @@ async def _check_model_permissions(request: "Request") -> None:
         model = get_args(signature.parameters["results"].annotation)[0].model
 
     permissions_mapping = _get_permissions_mapping(request)
-    user_permissions = await _get_user_permissions(request.state.user)
+    user_permissions = _get_user_permissions(request.state.user)
 
     if request.method in permissions_mapping:
         permissions = permissions_mapping[request.method]

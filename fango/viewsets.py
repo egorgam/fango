@@ -173,7 +173,7 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
         else:
             return self.pydantic_model_action_classes["table"]
 
-    def get_queryset(self, request: Request) -> QuerySet:
+    async def get_queryset(self, request: Request) -> QuerySet:
         """
         Method for get queryset defined in ViewSet.
 
