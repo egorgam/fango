@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 from typing import Generic, TypedDict, TypeVar, get_args
 
-from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import IntegerChoices, Manager, Model
+from django.db.models import IntegerChoices, Manager
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from typing_extensions import NotRequired
 
@@ -62,45 +61,31 @@ class FangoModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("*", mode="before")
-    def validate_relation(cls, value):
+    def model_manager(cls, value):
         if isinstance(value, Manager):
             return value.all()
         return value
 
     @model_validator(mode="before")
     @classmethod
-    def validate_model(cls, data):
+    def choices_label(cls, data):
         from fango.utils import get_choices_label
 
         for key, field in cls.model_fields.items():
-            if isinstance(data, dict):
-                if value := data.get(key, field.default):
-                    data[key] = value
+            value = data.get(key, field.default) if isinstance(data, dict) else getattr(data, key, field.default)
+            for enum in get_args(field.annotation):
+                if issubclass(enum, IntegerChoices):
+                    label = get_choices_label(enum, value)
+                    data.update({key: label}) if isinstance(data, dict) else setattr(data, key, label)
 
-                for type_ in get_args(field.annotation):
-                    if issubclass(type_, IntegerChoices):
-                        data[key] = get_choices_label(type_, value or field.default)  # type: ignore
-
-                    elif metadata := getattr(type_, "__pydantic_generic_metadata__", None):
-                        if value is not None and metadata["origin"] is ChoicesItem:
-                            data[key] = {"id": value, "name": get_choices_label(metadata["args"][0], value)}
-
-            elif isinstance(data, Model):
-                try:
-                    value = getattr(data, key)
-                except ObjectDoesNotExist:
-                    value = None
-
-                if not value:
-                    setattr(data, key, value)
-
-                for type_ in get_args(field.annotation):
-                    if issubclass(type_, IntegerChoices):
-                        setattr(data, key, get_choices_label(type_, value or field.default))  # type: ignore
-
-                    elif metadata := getattr(type_, "__pydantic_generic_metadata__", None):
-                        if value is not None and metadata["origin"] is ChoicesItem:
-                            setattr(data, key, {"id": value, "name": get_choices_label(metadata["args"][0], value)})
+                elif metadata := getattr(enum, "__pydantic_generic_metadata__", None):
+                    if metadata["origin"] is ChoicesItem:
+                        label = get_choices_label(metadata["args"][0], value)
+                        (
+                            data.update({key: {"id": value, "name": label}})
+                            if isinstance(data, dict)
+                            else setattr(data, key, {"id": value, "name": label})
+                        )
 
         return data
 
