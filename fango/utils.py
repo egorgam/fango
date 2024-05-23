@@ -113,11 +113,11 @@ def copy_instance_method(method: MethodT) -> MethodT:
     )
 
 
-def get_choices_label(enum: type[Choices], value: int) -> str:
+def get_choices_label(enum: type[Choices], value: int) -> str | None:
     """
     Function returns choices text.
 
     """
 
-    choices_dict = {k: v for k, v in enum.choices}
-    return choices_dict[value]
+    choices_dict = dict(enum.choices)
+    return choices_dict.get(value)

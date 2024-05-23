@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from fango.adapters.types import PK
 from fango.log import log_params
-from fango.schemas import CRUDAdapter, UnlinkAdapter
+from fango.schemas import CRUDAdapter, LinkAdapter
 
 __all__ = ["PydanticAdapter"]
 
@@ -44,10 +44,8 @@ class PydanticAdapter(Model):
         """
         try:
             return _save_orm_instance(cls, schema_instance, pk=pk)
-        except ObjectDoesNotExist as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        except ValidationError as e:
-            raise HTTPException(status_code=400, detail=e.message)
+        except (ObjectDoesNotExist, ValidationError) as exc:
+            raise HTTPException(status_code=400, detail=getattr(exc, "message", str(exc)))
 
     class Meta:
         abstract = True
@@ -170,8 +168,8 @@ def _handle_multiple_relation(instance: Model, field: MultipleRel, key: str, val
     elif isinstance(value, CRUDAdapter):
         _handle_crud_adapter(instance, field, key, value)
 
-    elif isinstance(value, UnlinkAdapter):
-        _handle_unlink_adapter(instance, key, value)
+    elif isinstance(value, LinkAdapter):
+        _handle_link_adapter(instance, field, key, value)
 
     elif isinstance(value, list):
         data = []
@@ -200,8 +198,6 @@ def _get_or_create_relation(instance: Model, field: ForwardRel | MultipleRel, ke
 
     elif isinstance(value, BaseModel):
         if isinstance(field, ForwardRel):
-            rel = getattr(value, "id", None)
-
             if rel := getattr(instance, key, None):
                 rel_pk = rel.pk
             else:
@@ -209,7 +205,6 @@ def _get_or_create_relation(instance: Model, field: ForwardRel | MultipleRel, ke
 
         elif isinstance(field, MultipleRel):
             rel_pk = getattr(value, "id", None)
-
         else:
             raise AdapterError
 
@@ -227,7 +222,12 @@ def _get_or_create_relation(instance: Model, field: ForwardRel | MultipleRel, ke
     elif isinstance(value, Model):
         value.clean()
         value.save()
-        getattr(instance, field.name).add(value)
+
+        try:
+            getattr(instance, field.name).add(value)
+        except AttributeError:
+            setattr(instance, field.name, value)
+
         return value
 
     else:
@@ -240,7 +240,7 @@ def _handle_crud_adapter(instance: Model, field: MultipleRel, key: str, value: A
     Manages CRUD adapter.
 
     """
-    relation_set = getattr(instance, key, None)
+    relation_set = getattr(instance, key)
 
     for item in value.create:
         if item.id:
@@ -254,19 +254,25 @@ def _handle_crud_adapter(instance: Model, field: MultipleRel, key: str, value: A
 
         _get_or_create_relation(instance, field, key, item)
 
-    for item in value.delete:
-        relation = relation_set.get(pk=item)
+    for pk in value.delete:
+        relation = relation_set.get(pk=pk)
         relation.delete()
 
 
 @log_params("PoetryAdapter")
-def _handle_unlink_adapter(instance: Model, key: str, value: Any) -> None:
+def _handle_link_adapter(instance: Model, field: ForwardRel | MultipleRel, key: str, value: Any) -> None:
     """
-    Manages Unlink adapter.
+    Manages Link adapter.
 
     """
-    relation_set = getattr(instance, key, None)
+    relation_set = getattr(instance, key)
 
-    for pk in value.unlink:
+    for pk in value.add:
+        relation_set.add(pk)
+
+    for pk in value.remove:
         relation = relation_set.get(pk=pk)
-        setattr(relation, relation_set.field.name, None)
+        try:
+            relation_set.remove(pk)
+        except AttributeError:
+            setattr(relation, relation_set.field.name, None)

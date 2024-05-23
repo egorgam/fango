@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from enum import Enum
+from types import UnionType
 from typing import Generic, TypedDict, TypeVar, get_args
 
 from django.db.models import IntegerChoices, Manager
@@ -16,7 +18,7 @@ __all__ = [
     "ActionClasses",
     "Multiselect",
     "CRUDAdapter",
-    "UnlinkAdapter",
+    "LinkAdapter",
     "DBModel",
 ]
 
@@ -42,8 +44,9 @@ class CRUDAdapter(BaseModel, Generic[T]):
     delete: list[PK]
 
 
-class UnlinkAdapter(BaseModel, Generic[T]):
-    unlink: list[PK]
+class LinkAdapter(BaseModel, Generic[T]):
+    add: list[PK]
+    remove: list[PK]
 
 
 class Entry(BaseModel, Generic[T]):
@@ -61,9 +64,12 @@ class FangoModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("*", mode="before")
-    def model_manager(cls, value):
+    def model_manager(cls, value, info):
         if isinstance(value, Manager):
-            return value.all()
+            if PK in get_args(cls.model_fields[info.field_name].annotation):
+                return value.values_list("pk", flat=True)
+            else:
+                return value.all()
         return value
 
     @model_validator(mode="before")
@@ -73,19 +79,23 @@ class FangoModel(BaseModel):
 
         for key, field in cls.model_fields.items():
             value = data.get(key, field.default) if isinstance(data, dict) else getattr(data, key, field.default)
-            for enum in get_args(field.annotation):
-                if issubclass(enum, IntegerChoices):
-                    label = get_choices_label(enum, value)
-                    data.update({key: label}) if isinstance(data, dict) else setattr(data, key, label)
+            for arg in get_args(field.annotation):
+                if not isinstance(arg, UnionType):
+                    if issubclass(arg, IntegerChoices):
+                        label = get_choices_label(arg, value)
+                        data.update({key: label}) if isinstance(data, dict) else setattr(data, key, label)
 
-                elif metadata := getattr(enum, "__pydantic_generic_metadata__", None):
-                    if metadata["origin"] is ChoicesItem:
-                        label = get_choices_label(metadata["args"][0], value)
-                        (
-                            data.update({key: {"id": value, "name": label}})
-                            if isinstance(data, dict)
-                            else setattr(data, key, {"id": value, "name": label})
-                        )
+                    elif issubclass(arg, Enum):
+                        data.update({key: label}) if isinstance(data, dict) else setattr(data, key, label)
+
+                    elif metadata := getattr(arg, "__pydantic_generic_metadata__", None):
+                        if metadata["origin"] is ChoicesItem and value is not None:
+                            label = get_choices_label(metadata["args"][0], value)
+                            (
+                                data.update({key: {"id": value, "name": label}})
+                                if isinstance(data, dict)
+                                else setattr(data, key, {"id": value, "name": label})
+                            )
 
         return data
 
