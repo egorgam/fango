@@ -120,6 +120,11 @@ class Token(BaseModel):
     access: str
 
 
+class OpenAPIToken(BaseModel):
+    access_token: str
+    token_type: str
+
+
 class Credentials(BaseModel):
     email: str
     password: str
