@@ -6,7 +6,8 @@ from typing import Any, Callable
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Choices
+from django.core.exceptions import FieldDoesNotExist
+from django.db.models import Choices, Field, Model
 from django.db.models.enums import ChoicesMeta
 from fastapi.concurrency import run_in_threadpool
 
@@ -22,6 +23,7 @@ __all__ = [
     "get_choices_as_data",
     "copy_instance_method",
     "get_choices_label",
+    "get_model_field_safe",
 ]
 
 
@@ -121,3 +123,15 @@ def get_choices_label(enum: type[Choices], value: int) -> str | None:
 
     choices_dict = dict(enum.choices)
     return choices_dict.get(value)
+
+
+def get_model_field_safe(model: type[Model], field_name: str) -> Field:
+    """
+    Function returns model field by name.
+    If field is FK rel without related_name, this attr will be processet correctly.
+
+    """
+    try:
+        return model._meta.get_field(field_name)
+    except FieldDoesNotExist:
+        return model._meta.get_field(field_name.removesuffix("_set"))

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from fango.filters import generate_filterset_by_pydantic
 from fango.generics import BaseModelT, ModelT
-from fango.permissions import ALLOW_ANY
+from fango.permissions import PermissionDependency
 from fango.routing import FangoRouter, action
 from fango.schemas import ActionClasses
 from fango.utils import copy_instance_method
@@ -23,7 +23,7 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
     """
 
     _internal = FangoRouter()
-    pydantic_model: BaseModelT
+    pydantic_model: type[BaseModelT]
     payload_pydantic_model: BaseModelT | None = None
     queryset: QuerySet
     http_method_names: set[str]
@@ -33,6 +33,7 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
 
     def __init__(self, router: FangoRouter, basename: str) -> None:
         self.request: Request
+        self.pydantic_model = self.__get_pydantic_model_or_table_action_class()
         self.filterset_class = generate_filterset_by_pydantic(self.pydantic_model)
         self._router = router
         self._basename = basename
@@ -41,8 +42,8 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
         self.__merge_routers()
 
     def __initialize_http_methods(self) -> None:
-        ro_methods = {"HEAD", "TRACE", "OPTIONS", "GET"}
-        rw_methods = {"PATCH", "POST", "PUT", "DELETE"}
+        ro_methods = {"HEAD", "TRACE", "OPTIONS", "GET", "PATCH"}
+        rw_methods = {"POST", "PUT", "DELETE"}
 
         if hasattr(self, "queryset") and self.queryset.model._meta.managed:
             self.http_method_names = ro_methods | rw_methods
@@ -70,6 +71,20 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
         exclude = self.__patch_routes_in_action_router()
         self.__include_internal_router(exclude)
 
+    def __resolve_dependencies_and_permissions(self, route) -> list:
+        """
+        Merge route, viewset and @action dependencies and
+        resolve permissions priority, then use only max permission.
+
+        """
+        dependencies = {*route.dependencies, *self._router.dependencies, *self.dependencies}
+        all_applied_permissions = {x for x in dependencies if callable(x) and issubclass(x, PermissionDependency)}
+
+        if permission := {x() for x in dependencies if callable(x)}:
+            permission = max(permission).__class__
+
+        return list(dependencies - all_applied_permissions) + [permission]
+
     def __patch_routes_in_action_router(self) -> set[str]:
         """
         Process @action router.
@@ -79,10 +94,12 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
         for route in action.routes:
             route = cast(APIRoute, route)
 
-            if self.__class__.__name__ in route.endpoint.__qualname__ and route.endpoint.__module__ == self.__module__:
-                if ALLOW_ANY not in route.dependencies:
-                    route.dependencies = [*self._router.dependencies, *self.dependencies]
+            METHOD_IS_VALID_VIEWSET_ACTION = (
+                self.__class__.__name__ in route.endpoint.__qualname__ and route.endpoint.__module__ == self.__module__
+            )
 
+            if METHOD_IS_VALID_VIEWSET_ACTION:
+                route.dependencies = self.__resolve_dependencies_and_permissions(route)
                 route.endpoint = getattr(self, route.name)
                 route.path = f"{self._router.prefix}/{self._basename}{route.path}"
                 route.tags = [self._basename]  # type: ignore
@@ -105,7 +122,7 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
         ]
         for route in router.routes:
             route = cast(APIRoute, route)
-            route.dependencies = [*self._router.dependencies, *self.dependencies]
+            route.dependencies = self.__resolve_dependencies_and_permissions(route)
 
             if "%" in route.path:
                 route.path = route.path % self.lookup_value_converter
@@ -161,6 +178,24 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
                         route.response_model = klass
                     break
 
+    def __get_pydantic_model_or_table_action_class(self) -> type[BaseModelT]:
+        """
+        Method for get pydantic model from pydantic_model attr or action class.
+
+        """
+        if (
+            not hasattr(self, "pydantic_model")
+            and hasattr(self, "pydantic_model_action_classes")
+            and "list" in self.pydantic_model_action_classes
+        ):
+            return self.pydantic_model_action_classes["list"]
+
+        elif hasattr(self, "pydantic_model"):
+            return self.pydantic_model
+
+        else:
+            raise Exception("Method has no pydantic_model.")
+
     def get_pydantic_model_class(self, request: Request) -> type[BaseModelT]:
         """
         Method for get concrete pydantic_model for route.
@@ -171,7 +206,7 @@ class AsyncGenericViewSet(Generic[BaseModelT]):
         if model := self.pydantic_model_action_classes.get(route_name):
             return model
         else:
-            return self.pydantic_model_action_classes["table"]
+            return self.__get_pydantic_model_or_table_action_class()
 
     async def get_queryset(self, request: Request) -> QuerySet:
         """

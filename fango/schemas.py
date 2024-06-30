@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from typing_extensions import NotRequired
 
 from fango.adapters.types import PK
+from fango.generics import BaseModelT
 
 __all__ = [
     "Cursor",
@@ -66,7 +67,9 @@ class FangoModel(BaseModel):
     @field_validator("*", mode="before")
     def model_manager(cls, value, info):
         if isinstance(value, Manager):
-            if PK in get_args(cls.model_fields[info.field_name].annotation):
+            if PK in get_args(cls.model_fields[info.field_name].annotation) or list[PK] in get_args(
+                cls.model_fields[info.field_name].annotation
+            ):
                 return value.values_list("pk", flat=True)
             else:
                 return value.all()
@@ -109,11 +112,12 @@ class DBModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
 
-class ActionClasses(TypedDict):
-    table: NotRequired[type[BaseModel]]
-    retrieve: NotRequired[type[BaseModel]]
-    update: NotRequired[type[BaseModel]]
-    delete: NotRequired[type[BaseModel]]
+class ActionClasses(TypedDict, Generic[BaseModelT]):
+    list: NotRequired[type[BaseModelT]]
+    retrieve: NotRequired[type[BaseModelT]]
+    update: NotRequired[type[BaseModelT]]
+    delete: NotRequired[type[BaseModelT]]
+    page_meta: NotRequired[type[BaseModelT]]
 
 
 class Token(BaseModel):
