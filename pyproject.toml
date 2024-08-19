@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "fango"
-version = "0.0.25"
+version = "0.0.27"
 description = "Metaframework for web with combined FastAPI and Django"
 repository = "https://github.com/egorgam/fango"
 keywords = ["fastapi", "django", "fango"]
@@ -16,6 +16,9 @@ python-jose = "^3.3.0"
 pytest = "^8.0.1"
 django-filter = "^24.2"
 
+
+[tool.poetry.group.dev.dependencies]
+watchfiles = "^0.22.0"
 
 [build-system]
 requires = ["poetry-core"]

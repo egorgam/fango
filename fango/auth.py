@@ -5,24 +5,24 @@ __all__ = [
     "register_user",
     "authenticate_user",
     "create_access_token",
+    "set_context_user",
+    "context_user",
 ]
 
-import typing
-
-if typing.TYPE_CHECKING:
-    from django.contrib.auth.models import User
-
-from datetime import datetime, timedelta
+import contextvars
+from datetime import timedelta
 from uuid import uuid4
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.models import User
+from django.utils import timezone
 from fastapi import HTTPException, Request
 from jose import JWTError, jwt
 
 from fango.utils import run_async
 
-UserModel: "User" = get_user_model()  # type: ignore
+context_user = contextvars.ContextVar("context_user")
 
 
 def decode_token(auth: str) -> dict:
@@ -38,33 +38,42 @@ def decode_token(auth: str) -> dict:
         raise HTTPException(status_code=403, detail=str(e))
 
 
-def get_user(request: "Request") -> "User":
+def get_user(request: Request) -> User | None:
     """
-    Function returns User instance by token
-
-    """
-    payload = decode_token(request.headers["Authorization"])
-    user = UserModel.objects.only(*getattr(settings, "REQUEST_USER_FIELDS", ())).get(id=payload["user_id"])
-    request.state.user = user
-    return user
-
-
-async def get_user_async(request: "Request") -> "User":
-    """
-    Function returns User instance by token async
+    Function returns User instance by token.
 
     """
-    payload = decode_token(request.headers["Authorization"])
-    user = await UserModel.objects.only(*getattr(settings, "REQUEST_USER_FIELDS", ())).aget(id=payload["user_id"])
-    request.state.user = user
-    return user
+    UserModel: User = get_user_model()  # type: ignore
+    if access_token := request.headers.get("Authorization"):
+        payload = decode_token(access_token)
+        return UserModel.objects.only(*getattr(settings, "REQUEST_USER_FIELDS", ())).get(id=payload["user_id"])
 
 
-async def register_user(email: str, password: str) -> "User":
+async def get_user_async(request: Request) -> User | None:
+    """
+    Function returns User instance by token async.
+
+    """
+    UserModel: User = get_user_model()  # type: ignore
+    if access_token := request.headers.get("Authorization"):
+        payload = decode_token(access_token)
+        return await UserModel.objects.only(*getattr(settings, "REQUEST_USER_FIELDS", ())).aget(id=payload["user_id"])
+
+
+async def set_context_user(request: Request) -> None:
+    """
+    Function set context_user context variable by request token.
+
+    """
+    context_user.set(await get_user_async(request))
+
+
+async def register_user(email: str, password: str) -> User:
     """
     Function is creating User instance by token async.
 
     """
+    UserModel: User = get_user_model()  # type: ignore
     user = await UserModel.objects.acreate(
         email=email,
     )
@@ -73,7 +82,7 @@ async def register_user(email: str, password: str) -> "User":
     return user
 
 
-async def authenticate_user(request: Request, email: str, password: str) -> "User":
+async def authenticate_user(request: Request, email: str, password: str) -> User:
     """
     Function is authenticate user with django backend.
 
@@ -81,15 +90,15 @@ async def authenticate_user(request: Request, email: str, password: str) -> "Use
     return await run_async(authenticate, request=request, email=email, password=password)
 
 
-def create_access_token(user: "User") -> str:
+def create_access_token(user: User) -> str:
     """
     Function is creating access token.
 
     """
     if expires_delta := timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES):
-        expire = datetime.utcnow() + expires_delta
+        expire = timezone.now() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        expire = timezone.now() + timedelta(minutes=15)
 
     to_encode = {
         "exp": expire,

@@ -44,7 +44,7 @@ class LimitedListFilter(Filter):
         return qs
 
 
-def generate_filterset_by_pydantic(schema: type[BaseModel]) -> type[FilterSet]:
+def generate_filterset_by_pydantic(schema: BaseModel) -> type[FilterSet]:
     """
     Function generates django-filters FilterSet, based on pydantic schema fields.
 

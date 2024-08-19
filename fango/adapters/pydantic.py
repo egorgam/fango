@@ -7,6 +7,7 @@ from django.db.models import Model
 from django.db.models.fields.related import (
     ForeignKey,
     ManyToManyField,
+    ManyToManyRel,
     ManyToOneRel,
     OneToOneField,
     OneToOneRel,
@@ -17,11 +18,12 @@ from pydantic import BaseModel
 from fango.adapters.types import PK
 from fango.log import log_params
 from fango.schemas import CRUDAdapter, LinkAdapter
+from fango.utils import get_model_field_safe
 
 __all__ = ["PydanticAdapter"]
 
 ForwardRel = ForeignKey | OneToOneField | OneToOneRel
-MultipleRel = ManyToOneRel | ManyToManyField
+MultipleRel = ManyToOneRel | ManyToManyField | ManyToManyRel
 
 
 class AdapterError(Exception):
@@ -35,7 +37,7 @@ class PydanticAdapter(Model):
     """
 
     @classmethod
-    @sync_to_async
+    @sync_to_async(thread_sensitive=False)
     @transaction.atomic
     def save_from_schema(cls, schema_instance: BaseModel, pk: PK | None = None) -> Model:
         """
@@ -100,9 +102,6 @@ def _get_or_create_instance(
             else:
                 relation[remote_field.name] = None
 
-        else:
-            raise AdapterError
-
     if instance := model.objects.filter(pk=pk).first():
         for attr, value in relation.items():
             setattr(instance, attr, value)
@@ -123,7 +122,7 @@ def _get_handlers(instance: Model, model: type[Model], schema_instance: BaseMode
         if isinstance(getattr(model, key), property):
             continue
 
-        field = model._meta.get_field(key)
+        field = get_model_field_safe(model, key)
         args = (instance, field, key, value)
 
         if isinstance(field, OneToOneRel):
@@ -156,33 +155,23 @@ def _handle_multiple_relation(instance: Model, field: MultipleRel, key: str, val
     Manages ManyToOne and ManyToMany relationship for model instances.
 
     """
-    relation_set = getattr(instance, key, None)
+    relation_set = getattr(instance, key)
 
-    if value is None or value is []:
-        if relation_set:
-            try:
-                relation_set.clear()
-            except AttributeError:
-                relation_set.all().delete()
+    if value is None:
+        relation_set.set([])
 
     elif isinstance(value, CRUDAdapter):
         _handle_crud_adapter(instance, field, key, value)
 
     elif isinstance(value, LinkAdapter):
-        _handle_link_adapter(instance, field, key, value)
+        _handle_link_adapter(instance, key, value)
 
     elif isinstance(value, list):
         data = []
         for item in value:
             data.append(_get_or_create_relation(instance, field, key, item))
 
-        try:
-            relation_set.set(data)
-        except AttributeError:
-            relation_set.all().delete()
-            for item in data:
-                item.clean()
-                item.save()
+        relation_set.set(data)
     else:
         raise AdapterError
 
@@ -205,8 +194,6 @@ def _get_or_create_relation(instance: Model, field: ForwardRel | MultipleRel, ke
 
         elif isinstance(field, MultipleRel):
             rel_pk = getattr(value, "id", None)
-        else:
-            raise AdapterError
 
         return _save_orm_instance(
             model=field.related_model,
@@ -260,7 +247,7 @@ def _handle_crud_adapter(instance: Model, field: MultipleRel, key: str, value: A
 
 
 @log_params("PoetryAdapter")
-def _handle_link_adapter(instance: Model, field: ForwardRel | MultipleRel, key: str, value: Any) -> None:
+def _handle_link_adapter(instance: Model, key: str, value: Any) -> None:
     """
     Manages Link adapter.
 

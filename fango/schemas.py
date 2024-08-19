@@ -1,13 +1,16 @@
 from dataclasses import dataclass
 from enum import Enum
 from types import UnionType
-from typing import Generic, TypedDict, TypeVar, get_args
+from typing import Any, Generic, TypedDict, TypeVar, get_args
+from uuid import UUID
 
 from django.db.models import IntegerChoices, Manager
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic_core.core_schema import FieldValidationInfo
 from typing_extensions import NotRequired
 
 from fango.adapters.types import PK
+from fango.generics import BaseModelT
 
 __all__ = [
     "Cursor",
@@ -33,8 +36,8 @@ class Cursor:
 
 
 class Page(BaseModel, Generic[T]):
-    next: str | None
-    previous: str | None
+    next: str | None = None
+    previous: str | None = None
     results: list[T]
 
 
@@ -61,15 +64,18 @@ class ChoicesItem(BaseModel, Generic[T]):
 
 
 class FangoModel(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
 
     @field_validator("*", mode="before")
-    def model_manager(cls, value, info):
-        if isinstance(value, Manager):
-            if PK in get_args(cls.model_fields[info.field_name].annotation):
+    def model_manager(cls, value: Any, info: FieldValidationInfo):
+        if isinstance(value, Manager) and info.field_name:
+            annotations = get_args(cls.model_fields[info.field_name].annotation)
+
+            if any(type in annotations for type in [PK, list[PK], int, list[int], UUID, list[UUID]]):
                 return value.values_list("pk", flat=True)
             else:
                 return value.all()
+
         return value
 
     @model_validator(mode="before")
@@ -96,7 +102,6 @@ class FangoModel(BaseModel):
                                 if isinstance(data, dict)
                                 else setattr(data, key, {"id": value, "name": label})
                             )
-
         return data
 
 
@@ -109,11 +114,12 @@ class DBModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
 
-class ActionClasses(TypedDict):
-    table: NotRequired[type[BaseModel]]
-    retrieve: NotRequired[type[BaseModel]]
-    update: NotRequired[type[BaseModel]]
-    delete: NotRequired[type[BaseModel]]
+class ActionClasses(TypedDict, Generic[BaseModelT]):
+    list: NotRequired[BaseModelT]
+    retrieve: NotRequired[BaseModelT]
+    update: NotRequired[BaseModelT]
+    delete: NotRequired[BaseModelT]
+    page_meta: NotRequired[BaseModelT]
 
 
 class Token(BaseModel):
