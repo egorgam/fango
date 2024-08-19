@@ -37,7 +37,7 @@ class PydanticAdapter(Model):
     """
 
     @classmethod
-    @sync_to_async
+    @sync_to_async(thread_sensitive=False)
     @transaction.atomic
     def save_from_schema(cls, schema_instance: BaseModel, pk: PK | None = None) -> Model:
         """
@@ -101,8 +101,6 @@ def _get_or_create_instance(
                 relation[remote_field.name] = remote_instance
             else:
                 relation[remote_field.name] = None
-        else:
-            raise AdapterError
 
     if instance := model.objects.filter(pk=pk).first():
         for attr, value in relation.items():
@@ -157,14 +155,10 @@ def _handle_multiple_relation(instance: Model, field: MultipleRel, key: str, val
     Manages ManyToOne and ManyToMany relationship for model instances.
 
     """
-    relation_set = getattr(instance, key, None)
+    relation_set = getattr(instance, key)
 
-    if value is None or value == []:
-        if relation_set:
-            try:
-                relation_set.clear()
-            except AttributeError:
-                relation_set.all().delete()
+    if value is None:
+        relation_set.set([])
 
     elif isinstance(value, CRUDAdapter):
         _handle_crud_adapter(instance, field, key, value)
@@ -177,14 +171,7 @@ def _handle_multiple_relation(instance: Model, field: MultipleRel, key: str, val
         for item in value:
             data.append(_get_or_create_relation(instance, field, key, item))
 
-        if relation_set:
-            try:
-                relation_set.set(data)
-            except AttributeError:
-                relation_set.all().delete()
-                for item in data:
-                    item.clean()
-                    item.save()
+        relation_set.set(data)
     else:
         raise AdapterError
 
@@ -207,8 +194,6 @@ def _get_or_create_relation(instance: Model, field: ForwardRel | MultipleRel, ke
 
         elif isinstance(field, MultipleRel):
             rel_pk = getattr(value, "id", None)
-        else:
-            raise AdapterError
 
         return _save_orm_instance(
             model=field.related_model,

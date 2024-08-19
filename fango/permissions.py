@@ -7,7 +7,7 @@ from django.db.models import Model
 from django.utils.translation import gettext as _
 from fastapi import HTTPException, Request
 
-from fango.auth import add_user_to_request_state
+from fango.auth import context_user, set_context_user
 from fango.routing import oauth2_scheme
 from fango.utils import run_async, ttl_cache
 
@@ -48,13 +48,13 @@ class ModelPermissions(PermissionDependency):
 
     priority = 1
 
-    def __init__(self, model: Model | None = None) -> None:
-        self.model: Model | None = model
+    def __init__(self, model: type[Model] | None = None) -> None:
+        self.model: type[Model] | None = model
 
     @classmethod
     async def dependency(cls, request: Request) -> None:
         await oauth2_scheme(request)
-        await add_user_to_request_state(request)
+        await set_context_user(request)
         await _check_model_permissions(request)
 
 
@@ -69,7 +69,7 @@ class IsAuthenticated(PermissionDependency):
     @classmethod
     async def dependency(cls, request: Request) -> None:
         await oauth2_scheme(request)
-        await add_user_to_request_state(request)
+        await set_context_user(request)
 
 
 class AllowAny(PermissionDependency):
@@ -149,7 +149,7 @@ async def _check_model_permissions(request: Request, model=None) -> None:
     model = _get_request_base_model(request)
 
     permissions_mapping = _get_permissions_mapping(request)
-    user_permissions = await run_async(_get_user_permissions, request.state.user)
+    user_permissions = await run_async(_get_user_permissions, context_user.get())
 
     if request.method in permissions_mapping:
         permissions = permissions_mapping[request.method]

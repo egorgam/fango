@@ -2,16 +2,20 @@ import asyncio
 import types
 from functools import wraps
 from inspect import iscoroutinefunction
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:
+    from django.contrib.contenttypes.fields import GenericForeignKey
 
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import FieldDoesNotExist
-from django.db.models import Choices, Field, Model
+from django.db.models import Choices, Field, ForeignObjectRel, Model
 from django.db.models.enums import ChoicesMeta
 from fastapi.concurrency import run_in_threadpool
 
 from fango.generics import MethodT
+from fango.routing import FangoRouter
 from fango.schemas import ChoicesItem
 
 __all__ = [
@@ -24,6 +28,7 @@ __all__ = [
     "copy_instance_method",
     "get_choices_label",
     "get_model_field_safe",
+    "generate_tags_metadata",
 ]
 
 
@@ -73,7 +78,6 @@ async def run_async(func, *args, **kwargs) -> Any:
     Funcion is a wrapper to run sync code in async context using thread pool.
 
     """
-
     if iscoroutinefunction(func):
         raise Exception("Can't run coroutine in thread!")
 
@@ -85,7 +89,6 @@ def run_sync(func) -> Any:
     Funcion is a wrapper to run async code in sync context.
 
     """
-
     loop = asyncio.get_event_loop()
     return loop.run_until_complete(func)
 
@@ -120,18 +123,28 @@ def get_choices_label(enum: type[Choices], value: int) -> str | None:
     Function returns choices text.
 
     """
-
     choices_dict = dict(enum.choices)
     return choices_dict.get(value)
 
 
-def get_model_field_safe(model: type[Model], field_name: str) -> Field:
+def get_model_field_safe(model: type[Model], field_name: str) -> "Field | ForeignObjectRel | GenericForeignKey":
     """
     Function returns model field by name.
-    If field is FK rel without related_name, this attr will be processet correctly.
+    If field is FK rel without related_name, this attr will be processed correctly.
 
     """
     try:
         return model._meta.get_field(field_name)
     except FieldDoesNotExist:
         return model._meta.get_field(field_name.removesuffix("_set"))
+
+
+def generate_tags_metadata(router: FangoRouter) -> list[dict]:
+    """
+    Function retuns list of dicts with openapi metadata tags name and description for router.
+
+    """
+    return [
+        {"name": viewset._basename, "description": viewset.__doc__ or viewset.queryset.model._meta.verbose_name}
+        for viewset in router.viewsets
+    ]
